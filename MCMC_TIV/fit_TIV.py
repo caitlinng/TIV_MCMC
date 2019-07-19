@@ -4,15 +4,38 @@ Fits TIV model to given data
 
 # Module import
 import TIV_funcs
-
+import test_fit
 import pandas as pd
 import numpy as np
 import scipy as sci
 from scipy import stats as st
 import matplotlib.pyplot as plt
 
-# Test code to fit
+# Import viral load data (will try fitting first with plc_n1)
+days = range(1, 12)
 
+OST_n1 = np.array([days, [0.5,0.5,0.5,2.5,3.833333,3.5,3.166667,0.833333,0.5,0.5,0.5]])
+OST_n2 = np.array([days, [0.5,0.5,0.5,0.5,3.5,2.5,3.5,3.166667,2.5,0.5,0.5]])
+OST_n3 = np.array([days, [0.5,0.5,0.5,0.833333,1.166667,2.833333,4.166667,0.833333,1.166667,0.5,0.5]])
+OST_n4 = np.array([days, [0.5,0.5,0.5,0.5,0.833333,2.833333,2.833333,3.166667,1.166667,0.833333,0.5]])
+
+plc_n1 = np.array([days, [0.5,0.5,0.5,4.5,5.833333,4.5,3.5,3.5,2.833333,0.5,0.5]])
+plc_n2 = np.array([days, [0.5,0.5,0.5,0.5,4.166667,3.5,3.5,2.833333,0.5,0.5,0.5]])
+plc_n3 = np.array([days, [0.5,0.5,0.5,3.833333,4.833333,3.5,3.5,0.5,0.5,0.5,0.5]])
+plc_n4 = np.array([days, [0.5,0.5,0.5,1.166667,3.833333,3.5,2.833333,3.166667,0.5,0.5,0.5]])
+
+OST_list = np.array([OST_n1, OST_n2, OST_n3, OST_n4])
+plc_list = np.array([plc_n1, plc_n2, plc_n3, plc_n4])
+
+OST_all = np.array([[OST_n1, OST_n2], [OST_n3, OST_n4]])
+plc_all = np.array([[plc_n1, plc_n2], [plc_n3, plc_n4]])
+
+# Edit data so that day 1 is when there is detectable increase in viral load:
+time = range(0, 9)
+V_data = [0.5,4.5,5.833333,4.5,3.5,3.5,2.833333,0.5,0.5]
+plc_n1 = np.array([time, V_data])
+
+'''
 # Produce synthetic data
 
 # Parameters
@@ -42,6 +65,7 @@ ax2.set_ylabel("Viral load (TCID_{50})")
 ax2.set_yscale('log')
 
 plt.show()
+'''
 
 
 '''
@@ -51,7 +75,7 @@ MCMC Set-up
 w = [0.05, 0.05]
 
 # Number of iterates
-n_iterates = 3000
+n_iterates = 1000
 
 # Prior functions (what is our prior belief about beta, gamma)
 
@@ -62,18 +86,19 @@ def prior_param_belief_normal(mean, var):
     return st.norm(loc=mean, scale=var)
 
 # Prior belief is that beta and gamma are within a reasonable given range
-pV_prior_fun = prior_param_belief(150, 250)
-beta_prior_fun = prior_param_belief(0, 0.5)
+pV_prior_fun = prior_param_belief(1e-6, 1e+6) #(0, 24) #(-6, 6) #(150, 250)
+beta_prior_fun = prior_param_belief(1e-12, 1e-4) #(0, 0.5) # (e-12, e-4)  #(0, 0.5)
 
 prior_funcs = [pV_prior_fun, beta_prior_fun]
 
 # Starting guess [pV, beta]
 #init_param = data_param
 #init_param = [np.random.uniform(150, 250), np.random.uniform(0, 0.5)]
-init_param = [225, 0]
+init_param = [12.25, 5e-7]  #[225, 0]
 
 # Calculate the log likelihood of the initial guess
-init_ll = TIV_funcs.TIV_ll(V_data, init_param)
+#init_ll = TIV_funcs.TIV_ll(V_data, init_param)
+init_ll = TIV_funcs.TLIV_ll(V_data, init_param) # TODO: Testing with TLIV fit
 
 # And log likelihood of all subsequent guesses
 def run_chain(V_data, n_iterates, w, init_param, init_ll, prior_funcs):
@@ -109,7 +134,8 @@ def run_chain(V_data, n_iterates, w, init_param, init_ll, prior_funcs):
 
             else:
                 # Calculate LL of proposal
-                prop_ll = TIV_funcs.TIV_ll(V_data, prop_param)
+                #prop_ll = TIV_funcs.TIV_ll(V_data, prop_param)
+                prop_ll = TIV_funcs.TLIV_ll(V_data, prop_param) # TODO: Testing with TLIV fitting
 
             # Decide on accept/reject
             prior_fun = prior_funcs[j]  # Grab correct prior function
@@ -142,7 +168,13 @@ chain = run_chain(V_data, n_iterates, w, init_param, init_ll, prior_funcs)
 
 print(chain)
 
-# Show graphs
+# Show viral data curves (actual data vs model)
+V_data = [0.5, 4.5, 5.833333, 4.5, 3.5, 3.5, 2.833333, 0.5, 0.5]
+MCMC_param = [chain[1, -1], chain[2, -1]]
+
+test_fit.test_fit(plc_n1, MCMC_param)
+
+# Show MCMC graphs
 chain = pd.DataFrame(chain, columns=['ll', 'pV', 'beta']) # Change np to panda array
 
 n = np.arange(int(n_iterates)) # Creates array of iterates
@@ -167,3 +199,4 @@ chain[['pV']].plot(kind = 'hist')
 
 
 plt.show()
+
