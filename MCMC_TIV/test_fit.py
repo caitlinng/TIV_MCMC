@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import TIV_funcs
 
 '''
@@ -42,16 +43,6 @@ V_data = [0.5,4.5,5.833333,4.5,3.5,3.5,2.833333,0.5,0.5]
 
 time = range(0, len(V_data))
 
-'''
-# Trying to un-log the data points in case that was why the actual data is so low compared to the model...
-# But nope, doesn't work
-for i in range(len(V_data)):
-    print('i = ' + str(i))
-    print('V_data[i] = ' + str(V_data[i]))
-    V_data[i] = 10**V_data[i]
-    print('V_data[i] (supposedly exp) = ' + str(V_data[i]))
-'''
-
 plc_n1 = np.array([time, V_data])
 #print (V_data)
 #plt.plot(time, V_data, 'o', color='black')
@@ -68,3 +59,17 @@ init_param = [pV, beta, deltaV]  # Testing first with three
 MCMC_param = [100, 1.915738e-07]
 
 #test_fit(TIV_funcs.TIV_model, plc_n1, MCMC_param, len(V_data))
+
+#FIXME: SCRATCH - Testing out chain iterations
+chain = np.zeros((10, 5))
+chain = pd.DataFrame(chain, columns=['ll', 'pV', 'beta', 'deltaV', 'deltaI'])  # Change np to panda array
+
+# Loops through parameters to generate plots for each param
+
+# creating a list of dataframe columns
+columns = list(chain)
+print(columns)
+
+#for i in columns:
+    # printing the third element of the column
+ #   print(df[i][2])

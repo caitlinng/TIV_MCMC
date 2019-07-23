@@ -11,6 +11,9 @@ import scipy as sci
 from scipy import stats as st
 import matplotlib.pyplot as plt
 
+# Set random seed for reproducibility
+np.random.seed(42)
+
 # Import viral load data (will try fitting first with plc_n1)
 days = range(1, 12)
 
@@ -71,7 +74,7 @@ MCMC Set-up
 w = [0.1, 0.05, 0.05, 0.05]
 
 # Number of iterates
-n_iterates = 5000
+n_iterates = 500
 
 # Prior functions (what is our prior belief about beta, gamma)
 
@@ -153,10 +156,7 @@ def run_chain(model_ll, init_param, V_data, n_iterates, w, prior_funcs):  # NOTE
 
             # Likelihood ratio st.norm.rvs(1, 1)
             r = np.exp(prop_ll - ll) * prior_fun.pdf(prop_param[j]) / prior_fun.pdf(param[j])
-      #      print('prop_ll = ' + str(prop_ll))
-       #     print ('ll = ' + str(ll))
-        #    print ('prop_ll - ll = ' + str(prop_ll - ll))
-         #   print('np.exp(prop_ll - ll) = ' + str(np.exp(prop_ll - ll)))
+
             print('r = ' + str(r))
             # Is likelihood ratio less than or equal to one
             alpha = min(1, r)
@@ -184,6 +184,7 @@ def run_chain(model_ll, init_param, V_data, n_iterates, w, prior_funcs):  # NOTE
             chain[i, 1:] = param
     return chain
 
+# Choose to fit TIV or TLIV model
 model_ll = TIV_funcs.TIV_ll
 model = TIV_funcs.TIV_model
 
@@ -193,7 +194,8 @@ model = TIV_funcs.TIV_model
 # Start day 1 as when there is detectable increase in viral load
 
 V_data = [0.5,4.5,5.833333,4.5,3.5,3.5,2.833333,0.5,0.5]
-max_time = len(V_data) - 1
+max_time = len(V_data)
+
 time = range(0, max_time)
 
 plc_n1 = np.array([time, V_data])
@@ -209,57 +211,33 @@ chain = pd.DataFrame(chain, columns=['ll', 'pV', 'beta', 'deltaV', 'deltaI']) # 
 
 best_ll_index = chain[['ll']].idxmax()
 print('best_ll row = ' + str(chain.iloc[best_ll_index, :]))
-best_MCMC_param = chain.iloc[best_ll_index, [1,2]]
+best_MCMC_param = chain.iloc[best_ll_index, 1:]
 print('MCMC_param = ' + str(MCMC_param))
 
-#
-#test_fit.test_fit(model, plc_n1, MCMC_param, max_time)
+test_fit.test_fit(model, plc_n1, MCMC_param, max_time)
 
 # Show MCMC graphs
 n = np.arange(int(n_iterates)) # Creates array of iterates
 
-# Loops through parameters to generate plots for each param
-
-# creating a list of dataframe columns
+# Creating a list of dataframe columns
 columns = list(chain)
-'''
-for i in columns:
-    # printing the third element of the column
-    print(df[i][2])
-for i in chain[0, 1:]
-'''
 
+# Plotting ll
 chain.plot(kind= 'line', y = 'll')
 plt.ylabel('Log Likelihood')
 plt.xlabel('Iterate')
 
-chain.plot(kind = 'line', y = 'beta')
-#plt.plot(y = pbeta, color = 'r') # Plot true value as a single line
-plt.ylabel('Estimate for beta')
-plt.xlabel('Iterate')
+# Plotting each parameter
+for i in columns[1:]:
+    param = i
 
-chain.plot(kind = 'line', y = 'pV', color = 'b')
-#plt.plot(y = pgamma, color = 'r') # Plot true value as a single line
-plt.ylabel('Estimate for pV')
-plt.xlabel('Iterate')
+    # Plotting chain
+    chain.plot(kind= 'line', y = param)
+    plt.ylabel('Estimate for ' + str(param))
+    plt.xlabel('Iterate')
 
-chain.plot(kind = 'line', y = 'deltaV', color = 'b')
-#plt.plot(y = pgamma, color = 'r') # Plot true value as a single line
-plt.ylabel('Estimate for deltaV')
-plt.xlabel('Iterate')
-
-chain.plot(kind = 'line', y = 'deltaI', color = 'b')
-#plt.plot(y = pgamma, color = 'r') # Plot true value as a single line
-plt.ylabel('Estimate for deltaI')
-plt.xlabel('Iterate')
-
-chain[['beta']].plot(kind = 'hist')
-
-chain[['pV']].plot(kind = 'hist')
-
-chain[['deltaV']].plot(kind = 'hist')
-
-chain[['deltaI']].plot(kind = 'hist')
+    # Plotting histogram
+    chain[[param]].plot(kind = 'hist')
 
 plt.show()
 
