@@ -11,23 +11,23 @@ SIR_model takes given parameters [beta, gamma]
 and returns solution to SIR differential equations as dictionary where t:[time], y:[S], [I], [R] at each time point (each day in 52 weeks)
 '''
 
-def TIV_model(param):  # Where param = [pV, beta]
+def TIV_model(param, max_time):  # Where param = [pV, beta]
     # Parameters
     pV = param[0]
     beta = param[1]
     betap = 3e-8 # Leaving this set for now to see if mcmc can find just two parameters first
-
-    # Initial conditions
-    T0 = 7e+7 #4e+8
-    I0 = 0
-    V0 = 1 # 1e+4
-
+    deltaV = param[2]
+    deltaI = param[3]  #2
     gT = 0.8
 
-    deltaV = 5
-    deltaI = 2
+    # Initial conditions
+    T0 = 7e+7  #4e+8
+    I0 = 0
+    V0 = 1  # 1e+4
 
-    time = np.linspace(0, 11, 11*12)
+
+
+    time = np.linspace(0, max_time, max_time)  #FIXME: Does the number of timepoints have to = the actual number of timepoints in the data? Is the ll being calculated against the right timepoint?
     y_init = [T0, I0, V0]
 
     # TIV differential equations
@@ -42,7 +42,7 @@ def TIV_model(param):  # Where param = [pV, beta]
 
     return sol
 
-def TLIV_model(param):
+def TLIV_model(param, max_time):
     # Parameters
     pV = param[0]
     beta = param[1]
@@ -60,7 +60,7 @@ def TLIV_model(param):
     deltaV = 5
     deltaI = 2
 
-    time = np.linspace(0, 9, 9*12)
+    time = np.linspace(0, max_time, max_time)
     y_init = [T0, L0, I0, V0]
 
     # TIV differential equations
@@ -77,13 +77,12 @@ def TLIV_model(param):
     return sol
 
 def TIV_ll(V_data, param):  # Where I_data = I (infected individuals) as retrieved from data
-    V_model = TIV_model(param).y[2]  # Obtain model values for I, given new parameters
+    V_model = TIV_model(param, len(V_data)).y[2]  # Obtain model values for I, given new parameters
     exp_sd = 1.5  # sd of experimental measurements of viral titre
     ll = 0
 
     for k in range(len(V_data)):
         new_ll = st.norm.logpdf(V_data[k], loc=V_model[k], scale=exp_sd)  # norm.logpdf(i, loc=mu, scale=sd)
-        print('new_ll = ' + str(new_ll))
         ll = ll + new_ll
 
     return ll
@@ -107,7 +106,6 @@ def TLIV_ll(V_data, param):  # Where I_data = I (infected individuals) as retrie
 
     for k in range(len(V_data)):
         new_ll = st.norm.logpdf(V_data[k], loc=V_model[k], scale=exp_sd)  # norm.logpdf(i, loc=mu, scale=sd)
-        print('new_ll = ' + str(new_ll))
         ll = ll + new_ll
 
     return ll

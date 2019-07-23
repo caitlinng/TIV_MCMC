@@ -30,21 +30,17 @@ plc_list = np.array([plc_n1, plc_n2, plc_n3, plc_n4])
 OST_all = np.array([[OST_n1, OST_n2], [OST_n3, OST_n4]])
 plc_all = np.array([[plc_n1, plc_n2], [plc_n3, plc_n4]])
 
-# Edit data so that day 1 is when there is detectable increase in viral load:
-time = range(0, 9)
-V_data = [0.5,4.5,5.833333,4.5,3.5,3.5,2.833333,0.5,0.5]
-plc_n1 = np.array([time, V_data])
 
 '''
 # Produce synthetic data
 
 # Parameters
-data_pV = 210
-data_beta = 5e-7
+data_pV = 15.6
+data_beta = 9e-05
 data_param = [data_pV, data_beta]
 
 # Solve TIV model and get viral load measurements as V_data
-data = TIV_funcs.TIV_model(data_param)
+data = TIV_funcs.TIV_model(data_param, max_time=8)
 V_data = data.y[2]
 
 # Plot TIV model
@@ -71,11 +67,11 @@ plt.show()
 '''
 MCMC Set-up
 '''
-# Proposal widths
-w = [0.05, 0.05]
+# Proposal widths (1 for each parameter)
+w = [0.1, 0.05, 0.05, 0.05]
 
 # Number of iterates
-n_iterates = 1000
+n_iterates = 5000
 
 # Prior functions (what is our prior belief about beta, gamma)
 
@@ -88,20 +84,35 @@ def prior_param_belief_normal(mean, var):
 # Prior belief is that beta and gamma are within a reasonable given range
 pV_prior_fun = prior_param_belief(1e-6, 1e+6) #(0, 24) #(-6, 6) #(150, 250)
 beta_prior_fun = prior_param_belief(1e-12, 1e-4) #(0, 0.5) # (e-12, e-4)  #(0, 0.5)
+deltaV_prior_fun = prior_param_belief(1e+0, 1e+2)
+deltaI_prior_fun = prior_param_belief(1e-1, 1e+2)
+gT_prior_fun = prior_param_belief(1e+7, 1e+8)
+V0_prior_fun = prior_param_belief(1e+0, 1e+3)
 
-prior_funcs = [pV_prior_fun, beta_prior_fun]
+prior_funcs = [pV_prior_fun, beta_prior_fun, deltaV_prior_fun, deltaI_prior_fun]
 
 # Starting guess [pV, beta]
 #init_param = data_param
 #init_param = [np.random.uniform(150, 250), np.random.uniform(0, 0.5)]
-init_param = [12.25, 5e-7]  #[225, 0]
 
-# Calculate the log likelihood of the initial guess
-#init_ll = TIV_funcs.TIV_ll(V_data, init_param)
-init_ll = TIV_funcs.TLIV_ll(V_data, init_param) # TODO: Testing with TLIV fit
+pV = 12.6
+beta = 5e-7
+deltaV = 8
+deltaI = 2
+gT = 0.8
+V0 = 1
 
-# And log likelihood of all subsequent guesses
-def run_chain(V_data, n_iterates, w, init_param, init_ll, prior_funcs):
+#init_param = [100, 1.915738e-07] #[15.66, 0.00009]  # [225, 0]
+init_param = [pV, beta, deltaV, deltaI]  # Testing first with three
+# initi_param = [pV, beta, deltaV, deltaI, gT, betap]
+
+def run_chain(model_ll, init_param, V_data, n_iterates, w, prior_funcs):  # NOTE: Need to input TIV_funcs.model_ll
+
+    # Calculate the log likelihood of the initial guess
+    init_ll = model_ll(V_data, init_param)
+    # init_ll = TIV_funcs.TLIV_ll(V_data, init_param) # TODO: Testing with TLIV fit
+
+    # And log likelihood of all subsequent guesses
     param = init_param.copy()
     ll = init_ll.copy()
 
@@ -134,18 +145,18 @@ def run_chain(V_data, n_iterates, w, init_param, init_ll, prior_funcs):
 
             else:
                 # Calculate LL of proposal
-                #prop_ll = TIV_funcs.TIV_ll(V_data, prop_param)
-                prop_ll = TIV_funcs.TLIV_ll(V_data, prop_param) # TODO: Testing with TLIV fitting
+                prop_ll = model_ll(V_data, prop_param)
+                #prop_ll = TIV_funcs.TLIV_ll(V_data, prop_param) # TODO: Testing with TLIV fitting
 
             # Decide on accept/reject
             prior_fun = prior_funcs[j]  # Grab correct prior function
 
             # Likelihood ratio st.norm.rvs(1, 1)
             r = np.exp(prop_ll - ll) * prior_fun.pdf(prop_param[j]) / prior_fun.pdf(param[j])
-            print('prop_ll = ' + str(prop_ll))
-            print ('ll = ' + str(ll))
-            print ('prop_ll - ll = ' + str(prop_ll - ll))
-            print('np.exp(prop_ll - ll) = ' + str(np.exp(prop_ll - ll)))
+      #      print('prop_ll = ' + str(prop_ll))
+       #     print ('ll = ' + str(ll))
+        #    print ('prop_ll - ll = ' + str(prop_ll - ll))
+         #   print('np.exp(prop_ll - ll) = ' + str(np.exp(prop_ll - ll)))
             print('r = ' + str(r))
             # Is likelihood ratio less than or equal to one
             alpha = min(1, r)
@@ -155,29 +166,68 @@ def run_chain(V_data, n_iterates, w, init_param, init_ll, prior_funcs):
             test = np.random.uniform(0, 1)
             # Maybe accept
             if (test < alpha):
-                ll = prop_ll.copy()
-                param = prop_param.copy()
+                try:
+                    ll = prop_ll.copy()
+                    param = prop_param.copy()
+                    print('Parameters proposed = ' + str(prop_param))
+                    print('Accept new parameters ' + str(param))
+                except AttributeError:
+                    print('In AttributeError, ll was = ' + str(prop_ll))
+                    print('So param ' + str(prop_param) + ' were rejected')
+
             # "Else" reject, though nothing to write
+            else:
+                print('Reject parameters ' + str(prop_param))
 
             # Store iterate
             chain[i, 0] = ll
             chain[i, 1:] = param
     return chain
 
-chain = run_chain(V_data, n_iterates, w, init_param, init_ll, prior_funcs)
+model_ll = TIV_funcs.TIV_ll
+model = TIV_funcs.TIV_model
+
+# Keep data as is
+#V_data = [0.5, 0.5, 0.5,4.5,5.833333,4.5,3.5,3.5,2.833333,0.5,0.5]
+
+# Start day 1 as when there is detectable increase in viral load
+
+V_data = [0.5,4.5,5.833333,4.5,3.5,3.5,2.833333,0.5,0.5]
+max_time = len(V_data) - 1
+time = range(0, max_time)
+
+plc_n1 = np.array([time, V_data])
+
+chain = run_chain(model_ll, init_param, V_data, n_iterates, w, prior_funcs)
 
 print(chain)
 
 # Show viral data curves (actual data vs model)
-V_data = [0.5, 4.5, 5.833333, 4.5, 3.5, 3.5, 2.833333, 0.5, 0.5]
-MCMC_param = [chain[1, -1], chain[2, -1]]
+MCMC_param = chain[-1, 1:] # TODO: Looking at last estimated ll, not best one
 
-test_fit.test_fit(plc_n1, MCMC_param)
+chain = pd.DataFrame(chain, columns=['ll', 'pV', 'beta', 'deltaV', 'deltaI']) # Change np to panda array
+
+best_ll_index = chain[['ll']].idxmax()
+print('best_ll row = ' + str(chain.iloc[best_ll_index, :]))
+best_MCMC_param = chain.iloc[best_ll_index, [1,2]]
+print('MCMC_param = ' + str(MCMC_param))
+
+#
+#test_fit.test_fit(model, plc_n1, MCMC_param, max_time)
 
 # Show MCMC graphs
-chain = pd.DataFrame(chain, columns=['ll', 'pV', 'beta']) # Change np to panda array
-
 n = np.arange(int(n_iterates)) # Creates array of iterates
+
+# Loops through parameters to generate plots for each param
+
+# creating a list of dataframe columns
+columns = list(chain)
+'''
+for i in columns:
+    # printing the third element of the column
+    print(df[i][2])
+for i in chain[0, 1:]
+'''
 
 chain.plot(kind= 'line', y = 'll')
 plt.ylabel('Log Likelihood')
@@ -193,10 +243,23 @@ chain.plot(kind = 'line', y = 'pV', color = 'b')
 plt.ylabel('Estimate for pV')
 plt.xlabel('Iterate')
 
+chain.plot(kind = 'line', y = 'deltaV', color = 'b')
+#plt.plot(y = pgamma, color = 'r') # Plot true value as a single line
+plt.ylabel('Estimate for deltaV')
+plt.xlabel('Iterate')
+
+chain.plot(kind = 'line', y = 'deltaI', color = 'b')
+#plt.plot(y = pgamma, color = 'r') # Plot true value as a single line
+plt.ylabel('Estimate for deltaI')
+plt.xlabel('Iterate')
+
 chain[['beta']].plot(kind = 'hist')
 
 chain[['pV']].plot(kind = 'hist')
 
+chain[['deltaV']].plot(kind = 'hist')
+
+chain[['deltaI']].plot(kind = 'hist')
 
 plt.show()
 
